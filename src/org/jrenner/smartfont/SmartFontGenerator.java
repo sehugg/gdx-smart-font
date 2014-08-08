@@ -9,9 +9,11 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.PixmapPacker;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFontParameter;
 import com.badlogic.gdx.graphics.glutils.PixmapTextureData;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.GdxRuntimeException;
+
 import org.jrenner.smartfont.writer.BitmapFontWriter;
 
 public class SmartFontGenerator {
@@ -21,12 +23,18 @@ public class SmartFontGenerator {
 	private int referenceScreenWidth;
 	// TODO figure out optimal page size automatically
 	private int pageSize;
+	private int displayWidth;
+	private int displayHeight;
+	private Preferences fontPrefs;
 
 	public SmartFontGenerator() {
 		forceGeneration = false;
 		generatedFontDir = "generated-fonts/";
 		referenceScreenWidth = 1280;
 		pageSize = 512; // size of atlas pages for font pngs
+		fontPrefs = Gdx.app.getPreferences("org.jrenner.smartfont");
+		displayWidth = fontPrefs.getInteger("display-width", 0);
+		displayHeight = fontPrefs.getInteger("display-height", 0);
 	}
 
 
@@ -38,17 +46,15 @@ public class SmartFontGenerator {
 	public BitmapFont createFont(FileHandle fontFile, String fontName, int fontSize) {
 		BitmapFont font = null;
 		// if fonts are already generated, just load from file
-		Preferences fontPrefs = Gdx.app.getPreferences("org.jrenner.smartfont");
-		int displayWidth = fontPrefs.getInteger("display-width", 0);
-		int displayHeight = fontPrefs.getInteger("display-height", 0);
 		boolean loaded = false;
+		FileHandle bitmapFontFile = getFontFile(fontName + ".fnt");
 		if (displayWidth != Gdx.graphics.getWidth() || displayHeight != Gdx.graphics.getHeight()) {
 			Gdx.app.debug(TAG, "Screen size change detected, regenerating fonts");
 		} else {
 			try {
 				// try to load from file
 				Gdx.app.debug(TAG, "Loading generated font from file cache");
-				font = new BitmapFont(getFontFile(fontName + ".fnt"));
+				font = new BitmapFont(bitmapFontFile);
 				loaded = true;
 			} catch (GdxRuntimeException e) {
 				Gdx.app.error(TAG, e.getMessage());
@@ -63,11 +69,17 @@ public class SmartFontGenerator {
 
 			// store screen width for detecting screen size change
 			// on later startups, which will require font regeneration
-			fontPrefs.putInteger("display-width", Gdx.graphics.getWidth());
-			fontPrefs.putInteger("display-height", Gdx.graphics.getHeight());
-			fontPrefs.flush();
-
+			// TODO: this only works properly if the app creates a single instance of this class
+			if (fontPrefs != null)
+			{
+				fontPrefs.putInteger("display-width", Gdx.graphics.getWidth());
+				fontPrefs.putInteger("display-height", Gdx.graphics.getHeight());
+				fontPrefs.flush();
+				fontPrefs = null;
+			}
 			font = generateFontWriteFiles(fontName, fontFile, fontSize, pageSize, pageSize);
+			// TODO: we must reload the font to keep font metrics consistent, why?
+			font = new BitmapFont(bitmapFontFile);
 		}
 		return font;
 	}
@@ -82,7 +94,12 @@ public class SmartFontGenerator {
 		FreeTypeFontGenerator generator = new FreeTypeFontGenerator(fontFile);
 
 		PixmapPacker packer = new PixmapPacker(pageWidth, pageHeight, Pixmap.Format.RGBA8888, 2, false);
-		FreeTypeFontGenerator.FreeTypeBitmapFontData fontData = generator.generateData(fontSize, FreeTypeFontGenerator.DEFAULT_CHARS, false, packer);
+		FreeTypeFontParameter fontParams = new FreeTypeFontParameter();
+		fontParams.size = fontSize;
+		fontParams.characters = FreeTypeFontGenerator.DEFAULT_CHARS;
+		fontParams.flip = false;
+		fontParams.packer = packer;
+		FreeTypeFontGenerator.FreeTypeBitmapFontData fontData = generator.generateData(fontParams);
 		Array<PixmapPacker.Page> pages = packer.getPages();
 		TextureRegion[] texRegions = new TextureRegion[pages.size];
 		for (int i=0; i<pages.size; i++) {

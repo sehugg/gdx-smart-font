@@ -23,8 +23,9 @@ public class SmartFontGenerator {
 	private int referenceScreenWidth;
 	// TODO figure out optimal page size automatically
 	private int pageSize;
-	private int displayWidth;
-	private int displayHeight;
+	
+	private static int displayWidth;
+	private static int displayHeight;
 	private Preferences fontPrefs;
 
 	public SmartFontGenerator() {
@@ -33,8 +34,11 @@ public class SmartFontGenerator {
 		referenceScreenWidth = 1280;
 		pageSize = 512; // size of atlas pages for font pngs
 		fontPrefs = Gdx.app.getPreferences("org.jrenner.smartfont");
-		displayWidth = fontPrefs.getInteger("display-width", 0);
-		displayHeight = fontPrefs.getInteger("display-height", 0);
+		if (displayWidth == 0 || displayHeight == 0)
+		{
+			displayWidth = fontPrefs.getInteger("display-width", 0);
+			displayHeight = fontPrefs.getInteger("display-height", 0);
+		}
 	}
 
 
@@ -69,7 +73,6 @@ public class SmartFontGenerator {
 
 			// store screen width for detecting screen size change
 			// on later startups, which will require font regeneration
-			// TODO: this only works properly if the app creates a single instance of this class
 			if (fontPrefs != null)
 			{
 				fontPrefs.putInteger("display-width", Gdx.graphics.getWidth());
